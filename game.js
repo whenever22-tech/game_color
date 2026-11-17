@@ -13,9 +13,13 @@ function showCombo(bonus){
   comboTimeout = setTimeout(hideCombo, 1400);
 }
 function showBest(){ $('best').innerHTML = `${best}<span>점</span>`; $('side-best').innerHTML = `${best} <small>점</small>`; }
+function showStreak(){ $('streak-count').innerHTML = `${streak}<span>회</span>`; }
 function updateTime(){
   const remaining = Math.max(0, deadline - performance.now());
-  $('time').innerHTML = `${Math.ceil(remaining / 100) / 10}<span>초</span>`;
+  const seconds = Math.ceil(remaining / 100) / 10;
+  $('timer').setAttribute('aria-valuemax', Math.max(30, seconds));
+  $('timer').setAttribute('aria-valuenow', seconds);
+  $('timer').setAttribute('aria-valuetext', `남은 시간 ${seconds}초`);
   $('timer-fill').style.width = `${Math.min(100, remaining / 300)}%`;
   $('timer-fill').classList.toggle('urgent',remaining < 8000);
   if(remaining === 0) finish();
@@ -38,7 +42,7 @@ function makeBoard(preview=false){
       if(!running || revealing) return;
       if(performance.now() >= deadline){updateTime(); return;}
       if(i===answer){
-        score++; streak++; hideCombo();
+        score++; streak++; showStreak(); hideCombo();
         const bonus = streak === 5 ? 3 : streak > 5 ? (streak % 5 === 0 ? 2 : .5) : 0;
         deadline += bonus * 1000;
         updateTime();
@@ -49,7 +53,7 @@ function makeBoard(preview=false){
         if(bonus) $('feedback').textContent = `정답! 보너스 +${bonus}초 · ${streak}회 연속 성공!`;
         makeBoard();
       } else {
-        streak = 0; hideCombo();
+        streak = 0; showStreak(); hideCombo();
         mistakes++;
         if(mistakes === 3){
           revealing = true;
@@ -95,7 +99,7 @@ function finish(){
   $('start').focus();
 }
 $('start').addEventListener('click',()=>{
-  clearTimeout(revealTimeout); score=0; streak=0; hideCombo(); running=true; deadline=performance.now()+30000;
+  clearTimeout(revealTimeout); score=0; streak=0; showStreak(); hideCombo(); running=true; deadline=performance.now()+30000;
   $('score').innerHTML='0<span>점</span>'; $('level').textContent='LEVEL 01';
   $('overlay').hidden=true;
   $('overlay').classList.remove('result');

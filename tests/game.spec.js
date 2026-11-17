@@ -1,6 +1,9 @@
 import { readFile } from 'node:fs/promises';
 import {test,expect} from '@playwright/test';
 test.use({hasTouch:true});
+async function expectRemaining(page,seconds){
+  await expect(page.getByRole('progressbar',{name:'남은 시간'})).toHaveAttribute('aria-valuenow',String(seconds));
+}
 async function differentTile(page){
   const colors=await page.locator('.tile').evaluateAll(tiles=>tiles.map(t=>t.style.backgroundColor));
   const index=colors.findIndex(color=>colors.filter(c=>c===color).length===1);
@@ -23,7 +26,7 @@ test('정답, 오답, 난이도, 시간 종료, 최고 기록과 재시작',asyn
   await expect(page.locator('#score')).toHaveText('4점');
   await expect(page.locator('.tile')).toHaveCount(9);
   await page.clock.fastForward(30001);
-  await expect(page.locator('#time')).toHaveText('0초');
+  await expectRemaining(page, 0);
   await expect(page.locator('#overlay')).toBeVisible();
   await expect(page.locator('#overlay-copy')).toContainText('4개');
   await expect(page.locator('#best')).toHaveText('4점');
@@ -35,7 +38,8 @@ test('정답, 오답, 난이도, 시간 종료, 최고 기록과 재시작',asyn
   await expect(page.locator('.tile')).toHaveCount(4);
   await page.clock.fastForward(30001);
   await page.getByRole('button',{name:'다시 시작하기'}).click();
-  await expect(page.locator('#time')).toHaveText('30초');
+  await expect(page.locator('#streak-count')).toHaveText('0회');
+  await expectRemaining(page, 30);
   await expect(page.locator('#overlay')).toBeHidden();
 });
 test('모바일 터치와 가로 넘침 없음',async({page})=>{
@@ -88,6 +92,7 @@ test('하위 폴더에서도 상대 경로로 스타일과 일반 스크립트 �
   await page.clock.fastForward(30001);
   await expect(page.locator('#overlay')).toBeVisible();
   await page.getByRole('button',{name:'다시 시작하기'}).click();
+  await expect(page.locator('#streak-count')).toHaveText('0회');
   await expect(page.locator('#score')).toHaveText('0점');
   expect(errors).toEqual([]);
 });
@@ -109,7 +114,8 @@ test('5연속 +3초, 이후 5의 배수 +2초와 그 외 +0.5초, 콤보는 5의
   const expectedSeconds=[30,30,30,30,33,33.5,34,34.5,35,37,37.5,38,38.5,39,41,41.5,42,42.5,43,45];
   for(let n=1;n<=20;n++){
     await (await differentTile(page)).click();
-    await expect(page.locator('#time')).toHaveText(`${expectedSeconds[n-1]}초`);
+    await expectRemaining(page, expectedSeconds[n-1]);
+    await expect(page.locator('#streak-count')).toHaveText(`${n}회`);
     if(n%5===0) await expect(page.locator('#combo')).toHaveText(`✦ ${n} COMBO! +${n===5?3:2}초`);
     else await expect(page.locator('#combo')).toBeHidden();
   }
@@ -118,31 +124,33 @@ test('5연속 +3초, 이후 5의 배수 +2초와 그 외 +0.5초, 콤보는 5의
   await expect(page.locator('#combo')).toBeHidden();
   await page.clock.runFor(45000);
   await expect(page.locator('#overlay')).toBeVisible();
-  await expect(page.locator('#time')).toHaveText('0초');
+  await expectRemaining(page, 0);
 });
 test('오답과 재시작 시 연속 기록 초기화, 만료 후 보너스 없음',async({page})=>{
   await startFrozen(page);
   for(let n=0;n<5;n++) await (await differentTile(page)).click();
-  await expect(page.locator('#time')).toHaveText('33초');
+  await expectRemaining(page, 33);
   await wrongTile(page);
   await expect(page.locator('#combo')).toBeHidden();
   await expect(page.locator('#score')).toHaveText('5점');
-  await expect(page.locator('#time')).toHaveText('33초');
+  await expect(page.locator('#streak-count')).toHaveText('0회');
+  await expectRemaining(page, 33);
   for(let n=0;n<4;n++) await (await differentTile(page)).click();
-  await expect(page.locator('#time')).toHaveText('33초');
+  await expectRemaining(page, 33);
   await expect(page.locator('#combo')).toBeHidden();
   await (await differentTile(page)).click();
   await expect(page.locator('#combo')).toHaveText('✦ 5 COMBO! +3초');
-  await expect(page.locator('#time')).toHaveText('36초');
+  await expectRemaining(page, 36);
   await page.clock.runFor(36001);
   await page.getByRole('button',{name:'다시 시작하기'}).click();
+  await expect(page.locator('#streak-count')).toHaveText('0회');
   for(let n=0;n<4;n++) await (await differentTile(page)).click();
-  await expect(page.locator('#time')).toHaveText('30초');
+  await expectRemaining(page, 30);
   await expect(page.locator('#combo')).toBeHidden();
   const target=await differentTile(page);
   await page.clock.runFor(30001);
   await target.dispatchEvent('click');
-  await expect(page.locator('#time')).toHaveText('0초');
+  await expectRemaining(page, 0);
   await expect(page.locator('#score')).toHaveText('4점');
 });
 test('원래 난이도로 4점마다 타일 증가, 색 차이 완만히 감소, 모바일 터치 가능',async({page})=>{
@@ -186,14 +194,14 @@ test('한 문제 3회 오답 시 실제 정답을 공개하고 입력을 잠근 
   expect(await page.locator('.tile').evaluateAll(ts=>ts.every(t=>t.disabled))).toBe(true);
   await answer.dispatchEvent('click');
   await expect(page.locator('#score')).toHaveText('0점');
-  await expect(page.locator('#time')).toHaveText('30초');
+  await expectRemaining(page, 30);
   await page.clock.runFor(1199);
   await expect(page.locator('.answer-reveal')).toHaveCount(1);
   await page.clock.runFor(1);
   await expect(page.locator('.answer-reveal')).toHaveCount(0);
   expect(await originalBoard.evaluate(t=>t.isConnected)).toBe(false);
   await expect(page.locator('#score')).toHaveText('0점');
-  await expect(page.locator('#time')).toHaveText('28.8초');
+  await expectRemaining(page, 28.8);
   await expect(page.locator('.tile')).toHaveCount(4);
   await expect(page.locator('.tile').first()).toBeEnabled();
   await wrongTile(page);
@@ -214,6 +222,7 @@ test('정답 공개 중 시간 종료 시 다음 문제로 넘어가지 않고 �
   await expect(page.locator('#overlay')).toBeVisible();
   await expect(page.locator('#score')).toHaveText('0점');
   await page.getByRole('button',{name:'다시 시작하기'}).click();
+  await expect(page.locator('#streak-count')).toHaveText('0회');
   const freshTile=await page.locator('.tile').first().elementHandle();
   await page.clock.runFor(1500);
   expect(await freshTile.evaluate(t=>t.isConnected)).toBe(true);
@@ -227,12 +236,13 @@ test('0.5초 보너스가 실제 종료 시점에 반영됨',async({page})=>{
   await startFrozen(page);
   for(let i=0;i<6;i++) await (await differentTile(page)).click();
   await expect(page.locator('#feedback')).toContainText('+0.5초');
-  await expect(page.locator('#time')).toHaveText('33.5초');
+  await expectRemaining(page, 33.5);
   await page.clock.runFor(33000);
-  await expect(page.locator('#time')).toHaveText('0.5초');
+  await expectRemaining(page, 0.5);
+  await expect(page.locator('#streak-count')).toHaveText('6회');
   await expect(page.locator('#overlay')).toBeHidden();
   await page.clock.runFor(500);
-  await expect(page.locator('#time')).toHaveText('0초');
+  await expectRemaining(page, 0);
   await expect(page.locator('#overlay')).toBeVisible();
 });
 for(const width of [375,1440]){
@@ -254,6 +264,7 @@ for(const width of [375,1440]){
     expect(await page.locator('.tile').evaluateAll(ts=>ts.every(t=>t.disabled))).toBe(true);
     await page.screenshot({path:`test-results/finished-${width}.png`,fullPage:true});
     await page.getByRole('button',{name:'다시 시작하기'}).click();
+  await expect(page.locator('#streak-count')).toHaveText('0회');
     await expect(page.locator('.answer-reveal')).toHaveCount(0);
     await expect(page.locator('#overlay')).toBeHidden();
     await expect(page.locator('#result-slot')).toBeEmpty();
