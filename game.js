@@ -2,6 +2,7 @@ const $ = id => document.getElementById(id);
 let best = 0;
 try { const saved = Number(localStorage.getItem('color-pop-best')); if(Number.isFinite(saved) && saved > 0) best = Math.floor(saved); } catch {}
 let score = 0, streak = 0, running = false, deadline = 0, interval, comboTimeout, revealTimeout;
+let currentAnswer = 0, currentSize = 2;
 function hideCombo(){
   clearTimeout(comboTimeout);
   $('combo').hidden = true;
@@ -14,7 +15,7 @@ function showCombo(bonus){
 function showBest(){ $('best').innerHTML = `${best}<span>점</span>`; $('side-best').innerHTML = `${best} <small>점</small>`; }
 function updateTime(){
   const remaining = Math.max(0, deadline - performance.now());
-  $('time').innerHTML = `${Math.ceil(remaining / 1000)}<span>초</span>`;
+  $('time').innerHTML = `${Math.ceil(remaining / 100) / 10}<span>초</span>`;
   $('timer-fill').style.width = `${Math.min(100, remaining / 300)}%`;
   $('timer-fill').classList.toggle('urgent',remaining < 8000);
   if(remaining === 0) finish();
@@ -25,6 +26,7 @@ function makeBoard(preview=false){
   const hue = Math.floor(Math.random()*360), light = 43 + Math.random()*12;
   const difference = Math.max(7, 24 - score * .7);
   const answer = Math.floor(Math.random()*size*size);
+  currentAnswer = answer; currentSize = size;
   $('board').style.gridTemplateColumns = `repeat(${size},1fr)`;
   $('board').replaceChildren();
   for(let i=0;i<size*size;i++){
@@ -37,7 +39,7 @@ function makeBoard(preview=false){
       if(performance.now() >= deadline){updateTime(); return;}
       if(i===answer){
         score++; streak++; hideCombo();
-        const bonus = streak === 5 ? 3 : streak >= 6 ? 1 : 0;
+        const bonus = streak === 5 ? 3 : streak > 5 ? (streak % 5 === 0 ? 2 : .5) : 0;
         deadline += bonus * 1000;
         updateTime();
         if(streak % 5 === 0) showCombo(bonus);
@@ -53,10 +55,7 @@ function makeBoard(preview=false){
           revealing = true;
           const tiles = [...$('board').children];
           tiles.forEach(t => t.disabled = true);
-          tiles[answer].classList.add('answer-reveal');
-          tiles[answer].setAttribute('aria-label', `${answer+1}번 타일, 정답`);
-          const row = Math.floor(answer / size) + 1, column = answer % size + 1;
-          $('feedback').textContent = `정답은 ${row}행 ${column}열이에요! 잠시 후 다음 문제로 넘어가요.`;
+          $('feedback').textContent = `정답은 ${revealAnswer()}이에요! 잠시 후 다음 문제로 넘어가요.`;
           revealTimeout = setTimeout(() => {
             if(!running) return;
             if(performance.now() >= deadline){updateTime(); return;}
@@ -72,7 +71,14 @@ function makeBoard(preview=false){
     $('board').append(tile);
   }
 }
+function revealAnswer(){
+  const tile = $('board').children[currentAnswer];
+  tile.classList.add('answer-reveal');
+  tile.setAttribute('aria-label', `${currentAnswer+1}번 타일, 정답`);
+  return `${Math.floor(currentAnswer / currentSize)+1}행 ${currentAnswer % currentSize+1}열`;
+}
 function finish(){
+  if(!running) return;
   running=false; clearInterval(interval); clearTimeout(revealTimeout); hideCombo();
   document.querySelectorAll('.tile').forEach(t=>t.disabled=true);
   const record=score>best;
@@ -82,14 +88,19 @@ function finish(){
   $('overlay-copy').textContent=`${score}개의 다른 색을 찾았어요. 멋진 집중력이에요!`;
   $('start').innerHTML='다시 시작하기 <span>↗</span>';
   $('overlay-note').textContent='한 번 더, 새로운 색을 만나볼까요?';
+  $('result-slot').append($('overlay'));
+  $('overlay').classList.add('result');
   $('overlay').hidden=false;
-  $('feedback').textContent='수고했어요! 잠깐 쉬었다 다시 도전해요.';
+  $('feedback').textContent = `시간 종료! 마지막 정답은 ${revealAnswer()}이에요. ✓ 표시를 확인해 보세요.`;
   $('start').focus();
 }
 $('start').addEventListener('click',()=>{
   clearTimeout(revealTimeout); score=0; streak=0; hideCombo(); running=true; deadline=performance.now()+30000;
   $('score').innerHTML='0<span>점</span>'; $('level').textContent='LEVEL 01';
-  $('overlay').hidden=true; $('feedback').textContent='혼자 다른 색의 타일을 찾아주세요!';
+  $('overlay').hidden=true;
+  $('overlay').classList.remove('result');
+  $('play-area').append($('overlay'));
+  $('feedback').textContent='혼자 다른 색의 타일을 찾아주세요!';
   makeBoard(); updateTime(); clearInterval(interval); interval=setInterval(updateTime,100);
 });
 document.addEventListener('visibilitychange',()=>{if(running) updateTime();});

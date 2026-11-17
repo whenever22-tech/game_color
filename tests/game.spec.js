@@ -104,18 +104,19 @@ async function wrongTile(page){
   const index=colors.findIndex(c=>colors.filter(x=>x===c).length>1);
   await page.locator('.tile').nth(index).click();
 }
-test('5연속 +3초, 이후 +1초, 콤보는 5의 배수에서만 표시',async({page})=>{
+test('5연속 +3초, 이후 5의 배수 +2초와 그 외 +0.5초, 콤보는 5의 배수에서만 표시',async({page})=>{
   await startFrozen(page);
-  for(let n=1;n<=15;n++){
+  const expectedSeconds=[30,30,30,30,33,33.5,34,34.5,35,37,37.5,38,38.5,39,41,41.5,42,42.5,43,45];
+  for(let n=1;n<=20;n++){
     await (await differentTile(page)).click();
-    await expect(page.locator('#time')).toHaveText(`${30+(n<5?0:3+n-5)}초`);
-    if(n%5===0) await expect(page.locator('#combo')).toHaveText(`✦ ${n} COMBO! +${n===5?3:1}초`);
+    await expect(page.locator('#time')).toHaveText(`${expectedSeconds[n-1]}초`);
+    if(n%5===0) await expect(page.locator('#combo')).toHaveText(`✦ ${n} COMBO! +${n===5?3:2}초`);
     else await expect(page.locator('#combo')).toBeHidden();
   }
   expect(await page.locator('#timer-fill').evaluate(t=>t.getBoundingClientRect().width<=t.parentElement.getBoundingClientRect().width)).toBe(true);
   await page.clock.runFor(1401);
   await expect(page.locator('#combo')).toBeHidden();
-  await page.clock.runFor(42000);
+  await page.clock.runFor(45000);
   await expect(page.locator('#overlay')).toBeVisible();
   await expect(page.locator('#time')).toHaveText('0초');
 });
@@ -192,7 +193,7 @@ test('한 문제 3회 오답 시 실제 정답을 공개하고 입력을 잠근 
   await expect(page.locator('.answer-reveal')).toHaveCount(0);
   expect(await originalBoard.evaluate(t=>t.isConnected)).toBe(false);
   await expect(page.locator('#score')).toHaveText('0점');
-  await expect(page.locator('#time')).toHaveText('29초');
+  await expect(page.locator('#time')).toHaveText('28.8초');
   await expect(page.locator('.tile')).toHaveCount(4);
   await expect(page.locator('.tile').first()).toBeEnabled();
   await wrongTile(page);
@@ -221,3 +222,42 @@ test('정답 공개 중 시간 종료 시 다음 문제로 넘어가지 않고 �
   await expect(page.locator('#feedback')).toContainText('1/3');
   await expect(page.locator('#overlay')).toBeHidden();
 });
+
+test('0.5초 보너스가 실제 종료 시점에 반영됨',async({page})=>{
+  await startFrozen(page);
+  for(let i=0;i<6;i++) await (await differentTile(page)).click();
+  await expect(page.locator('#feedback')).toContainText('+0.5초');
+  await expect(page.locator('#time')).toHaveText('33.5초');
+  await page.clock.runFor(33000);
+  await expect(page.locator('#time')).toHaveText('0.5초');
+  await expect(page.locator('#overlay')).toBeHidden();
+  await page.clock.runFor(500);
+  await expect(page.locator('#time')).toHaveText('0초');
+  await expect(page.locator('#overlay')).toBeVisible();
+});
+for(const width of [375,1440]){
+  test(`시간 종료 후 마지막 정답이 결과에 가려지지 않음 (${width}px)`,async({page})=>{
+    await page.setViewportSize({width,height:1000});
+    await startFrozen(page);
+    for(let i=0;i<4;i++) await (await differentTile(page)).click();
+    const answer=await differentTile(page);
+    const answerName=await answer.getAttribute('aria-label');
+    const index=Number(answerName.match(/\d+/)[0])-1;
+    await page.clock.runFor(30000);
+    await expect(page.locator('.answer-reveal')).toHaveAttribute('aria-label',`${answerName}, 정답`);
+    await expect(page.locator('#feedback')).toContainText(`${Math.floor(index/3)+1}행 ${index%3+1}열`);
+    await expect(page.locator('#overlay')).toBeVisible();
+    await expect(page.locator('#score')).toHaveText('4점');
+    const board=await page.locator('#board').boundingBox();
+    const result=await page.locator('#overlay').boundingBox();
+    expect(result.y).toBeGreaterThanOrEqual(board.y+board.height);
+    expect(await page.locator('.tile').evaluateAll(ts=>ts.every(t=>t.disabled))).toBe(true);
+    await page.screenshot({path:`test-results/finished-${width}.png`,fullPage:true});
+    await page.getByRole('button',{name:'다시 시작하기'}).click();
+    await expect(page.locator('.answer-reveal')).toHaveCount(0);
+    await expect(page.locator('#overlay')).toBeHidden();
+    await expect(page.locator('#result-slot')).toBeEmpty();
+    await (await differentTile(page)).click();
+    await expect(page.locator('#score')).toHaveText('1점');
+  });
+}

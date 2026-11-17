@@ -13,8 +13,9 @@
 <div class="stats"><div><span class="stat-label">남은 시간</span><strong id="time">30<span>초</span></strong></div><div><span class="stat-label">현재 점수</span><strong id="score">0<span>점</span></strong></div><div><span class="stat-label">✧ 최고 기록</span><strong id="best">0<span>점</span></strong></div></div>
 <div class="timer-track"><div id="timer-fill"></div></div>
 <div class="board-heading"><span id="level">READY TO POP?</span><span id="board-hint">다른 색은 단 하나!</span></div>
-<div class="play-area"><div id="board" aria-label="색깔 타일"></div><div id="combo" role="status" aria-live="polite" hidden></div><div id="overlay" class="overlay"><div class="overlay-symbol" aria-hidden="true">✳</div><h2 id="overlay-title">당신의 색감은 몇 점?</h2><p id="overlay-copy">30초로 시작! 연속 정답으로 시간을 늘려요.</p><button id="start" class="primary">게임 시작하기 <span>↗</span></button><span class="overlay-note" id="overlay-note">버튼을 누르면 시간이 시작돼요</span></div></div>
-<p id="feedback" role="status" aria-live="polite">가볍게 톡! 다른 색을 찾아주세요.</p><p class="combo-rules">5연속 +3초 · 6연속부터 매 정답 +1초<br>오답 시 연속 초기화 · 한 문제 3회 오답 시 정답 공개</p>
+<div id="play-area" class="play-area"><div id="board" aria-label="색깔 타일"></div><div id="combo" role="status" aria-live="polite" hidden></div><div id="overlay" class="overlay"><div class="overlay-symbol" aria-hidden="true">✳</div><h2 id="overlay-title">당신의 색감은 몇 점?</h2><p id="overlay-copy">30초로 시작! 연속 정답으로 시간을 늘려요.</p><button id="start" class="primary">게임 시작하기 <span>↗</span></button><span class="overlay-note" id="overlay-note">버튼을 누르면 시간이 시작돼요</span></div></div>
+<div id="result-slot"></div>
+<p id="feedback" role="status" aria-live="polite">가볍게 톡! 다른 색을 찾아주세요.</p><p class="combo-rules">5연속 +3초 · 이후 5의 배수 +2초, 그 외 +0.5초<br>오답 시 연속 초기화 · 한 문제 3회 오답 시 정답 공개</p>
 </div>
 <aside class="side-note"><div class="flower" aria-hidden="true">✿</div><span class="tiny-label">JUST 30 SECONDS</span><h2>잠깐의 집중,<br>작은 즐거움.</h2><p>화면 속 작은 차이를 발견하는<br>당신만의 감각을 깨워보세요.</p><div class="record"><span>🏆 나의 베스트</span><strong id="side-best">0 <small>점</small></strong><p>최고 기록은 이 브라우저에 저장돼요</p></div><span class="handwritten">오늘은 어디까지 갈 수 있을까?</span></aside>
 </section>
