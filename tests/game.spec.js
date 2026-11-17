@@ -21,7 +21,7 @@ test('정답, 오답, 난이도, 시간 종료, 최고 기록과 재시작',asyn
   await expect(page.locator('#feedback')).toContainText('다시');
   for(let i=0;i<4;i++) await (await differentTile(page)).click();
   await expect(page.locator('#score')).toHaveText('4점');
-  await expect(page.locator('.tile')).toHaveCount(16);
+  await expect(page.locator('.tile')).toHaveCount(9);
   await page.clock.fastForward(30001);
   await expect(page.locator('#time')).toHaveText('0초');
   await expect(page.locator('#overlay')).toBeVisible();
@@ -144,7 +144,7 @@ test('오답과 재시작 시 연속 기록 초기화, 만료 후 보너스 없�
   await expect(page.locator('#time')).toHaveText('0초');
   await expect(page.locator('#score')).toHaveText('4점');
 });
-test('타일은 2점마다 증가하고 색 차이는 빠르게 감소하며 모바일에서도 터치 가능',async({page})=>{
+test('원래 난이도로 4점마다 타일 증가, 색 차이 완만히 감소, 모바일 터치 가능',async({page})=>{
   await page.setViewportSize({width:375,height:812});
   await page.addInitScript(()=>{Math.random=()=>.5;});
   await startFrozen(page);
@@ -157,12 +157,67 @@ test('타일은 2점마다 증가하고 색 차이는 빠르게 감소하며 모
   const initial=await colorGap();
   for(let score=1;score<=16;score++){
     await (await differentTile(page)).tap();
-    await expect(page.locator('.tile')).toHaveCount(Math.min(6,2+Math.floor(score/2))**2);
+    await expect(page.locator('.tile')).toHaveCount(Math.min(6,2+Math.floor(score/4))**2);
     await differentTile(page); // 가장 어려운 단계에도 정답이 정확히 하나 존재
-    if(score===8) expect(await colorGap()).toBeLessThan(initial*.5);
+    if(score===16){
+      expect(await colorGap()).toBeGreaterThan(initial*.5);
+      expect(await colorGap()).toBeLessThan(initial*.7);
+    }
   }
   const tile=await page.locator('.tile').first().boundingBox();
   expect(tile.width).toBeGreaterThanOrEqual(36);
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
   await page.screenshot({path:'test-results/mobile-hard.png',fullPage:true});
+});
+
+test('한 문제 3회 오답 시 실제 정답을 공개하고 입력을 잠근 뒤 점수 없이 다음 문제로 이동',async({page})=>{
+  await startFrozen(page);
+  const answer=await differentTile(page);
+  const originalBoard=await answer.elementHandle();
+  const answerName=await answer.getAttribute('aria-label');
+  await wrongTile(page);
+  await wrongTile(page);
+  await expect(page.locator('.answer-reveal')).toHaveCount(0);
+  await expect(page.locator('#feedback')).toContainText('2/3');
+  await wrongTile(page);
+  await expect(page.locator('.answer-reveal')).toHaveAttribute('aria-label',`${answerName}, 정답`);
+  await expect(page.locator('#feedback')).toContainText('정답은');
+  expect(await page.locator('.tile').evaluateAll(ts=>ts.every(t=>t.disabled))).toBe(true);
+  await answer.dispatchEvent('click');
+  await expect(page.locator('#score')).toHaveText('0점');
+  await expect(page.locator('#time')).toHaveText('30초');
+  await page.clock.runFor(1199);
+  await expect(page.locator('.answer-reveal')).toHaveCount(1);
+  await page.clock.runFor(1);
+  await expect(page.locator('.answer-reveal')).toHaveCount(0);
+  expect(await originalBoard.evaluate(t=>t.isConnected)).toBe(false);
+  await expect(page.locator('#score')).toHaveText('0점');
+  await expect(page.locator('#time')).toHaveText('29초');
+  await expect(page.locator('.tile')).toHaveCount(4);
+  await expect(page.locator('.tile').first()).toBeEnabled();
+  await wrongTile(page);
+  await expect(page.locator('#feedback')).toContainText('1/3');
+  await wrongTile(page);
+  await (await differentTile(page)).click();
+  await wrongTile(page);
+  await wrongTile(page);
+  await expect(page.locator('.answer-reveal')).toHaveCount(0);
+  await expect(page.locator('#feedback')).toContainText('2/3');
+});
+test('정답 공개 중 시간 종료 시 다음 문제로 넘어가지 않고 재시작에 영향 없음',async({page})=>{
+  await startFrozen(page);
+  await page.clock.runFor(29000);
+  for(let i=0;i<3;i++) await wrongTile(page);
+  await expect(page.locator('.answer-reveal')).toHaveCount(1);
+  await page.clock.runFor(1001);
+  await expect(page.locator('#overlay')).toBeVisible();
+  await expect(page.locator('#score')).toHaveText('0점');
+  await page.getByRole('button',{name:'다시 시작하기'}).click();
+  const freshTile=await page.locator('.tile').first().elementHandle();
+  await page.clock.runFor(1500);
+  expect(await freshTile.evaluate(t=>t.isConnected)).toBe(true);
+  await expect(page.locator('.answer-reveal')).toHaveCount(0);
+  await wrongTile(page);
+  await expect(page.locator('#feedback')).toContainText('1/3');
+  await expect(page.locator('#overlay')).toBeHidden();
 });

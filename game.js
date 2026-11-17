@@ -1,7 +1,7 @@
 const $ = id => document.getElementById(id);
 let best = 0;
 try { const saved = Number(localStorage.getItem('color-pop-best')); if(Number.isFinite(saved) && saved > 0) best = Math.floor(saved); } catch {}
-let score = 0, streak = 0, running = false, deadline = 0, interval, comboTimeout;
+let score = 0, streak = 0, running = false, deadline = 0, interval, comboTimeout, revealTimeout;
 function hideCombo(){
   clearTimeout(comboTimeout);
   $('combo').hidden = true;
@@ -20,9 +20,10 @@ function updateTime(){
   if(remaining === 0) finish();
 }
 function makeBoard(preview=false){
-  const size = Math.min(6, 2 + Math.floor(score / 2));
+  let mistakes = 0, revealing = false;
+  const size = Math.min(6, 2 + Math.floor(score / 4));
   const hue = Math.floor(Math.random()*360), light = 43 + Math.random()*12;
-  const difference = Math.max(3, 18 * Math.pow(.88, score));
+  const difference = Math.max(7, 24 - score * .7);
   const answer = Math.floor(Math.random()*size*size);
   $('board').style.gridTemplateColumns = `repeat(${size},1fr)`;
   $('board').replaceChildren();
@@ -32,7 +33,7 @@ function makeBoard(preview=false){
     tile.style.backgroundColor=`hsl(${hue} 56% ${light + (i===answer ? difference : 0)}%)`;
     tile.disabled=preview;
     tile.addEventListener('click',()=>{
-      if(!running) return;
+      if(!running || revealing) return;
       if(performance.now() >= deadline){updateTime(); return;}
       if(i===answer){
         score++; streak++; hideCombo();
@@ -47,7 +48,24 @@ function makeBoard(preview=false){
         makeBoard();
       } else {
         streak = 0; hideCombo();
-        $('feedback').textContent='아쉬워요! 연속 기록이 끊겼어요. 다시 도전해요.';
+        mistakes++;
+        if(mistakes === 3){
+          revealing = true;
+          const tiles = [...$('board').children];
+          tiles.forEach(t => t.disabled = true);
+          tiles[answer].classList.add('answer-reveal');
+          tiles[answer].setAttribute('aria-label', `${answer+1}번 타일, 정답`);
+          const row = Math.floor(answer / size) + 1, column = answer % size + 1;
+          $('feedback').textContent = `정답은 ${row}행 ${column}열이에요! 잠시 후 다음 문제로 넘어가요.`;
+          revealTimeout = setTimeout(() => {
+            if(!running) return;
+            if(performance.now() >= deadline){updateTime(); return;}
+            makeBoard();
+            $('feedback').textContent = '새 문제예요! 다른 색을 찾아주세요.';
+          }, 1200);
+        } else {
+          $('feedback').textContent = `오답 ${mistakes}/3 · 연속 기록이 끊겼어요. 다시 골라보세요!`;
+        }
         tile.animate([{transform:'translateX(-3px)'},{transform:'translateX(3px)'},{transform:'translateX(0)'}],{duration:180,iterations:2});
       }
     });
@@ -55,7 +73,7 @@ function makeBoard(preview=false){
   }
 }
 function finish(){
-  running=false; clearInterval(interval); hideCombo();
+  running=false; clearInterval(interval); clearTimeout(revealTimeout); hideCombo();
   document.querySelectorAll('.tile').forEach(t=>t.disabled=true);
   const record=score>best;
   if(record){best=score;try{localStorage.setItem('color-pop-best',String(best));}catch{}}
@@ -69,7 +87,7 @@ function finish(){
   $('start').focus();
 }
 $('start').addEventListener('click',()=>{
-  score=0; streak=0; hideCombo(); running=true; deadline=performance.now()+30000;
+  clearTimeout(revealTimeout); score=0; streak=0; hideCombo(); running=true; deadline=performance.now()+30000;
   $('score').innerHTML='0<span>점</span>'; $('level').textContent='LEVEL 01';
   $('overlay').hidden=true; $('feedback').textContent='혼자 다른 색의 타일을 찾아주세요!';
   makeBoard(); updateTime(); clearInterval(interval); interval=setInterval(updateTime,100);
