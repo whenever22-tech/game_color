@@ -1,3 +1,4 @@
+import { readFile } from 'node:fs/promises';
 import {test,expect} from '@playwright/test';
 test.use({hasTouch:true});
 async function differentTile(page){
@@ -65,4 +66,28 @@ test('데스크톱 화면과 외부 요청 없음',async({page})=>{
   await expect(page.getByRole('button',{name:'게임 시작하기'})).toBeVisible();
   await page.screenshot({path:'test-results/desktop.png',fullPage:true});
   expect(external).toEqual([]);
+});
+
+test('하위 폴더에서도 상대 경로로 스타일과 일반 스크립트 로드',async({page})=>{
+  const errors=[];
+  page.on('pageerror',error=>errors.push(error.message));
+  await page.clock.install();
+  await page.route('**/download/game/*',async route=>{
+    const file=new URL(route.request().url()).pathname.split('/').pop();
+    if(!['index.html','style.css','game.js'].includes(file)){await route.abort();return;}
+    const contentType=file.endsWith('.html')?'text/html':file.endsWith('.css')?'text/css':'application/javascript';
+    await route.fulfill({body:await readFile(new URL('../'+file,import.meta.url)),contentType});
+  });
+  await page.goto('/download/game/index.html');
+  await expect(page.locator('script')).toHaveAttribute('defer','');
+  await expect(page.locator('script')).not.toHaveAttribute('type','module');
+  await expect(page.locator('.game-card')).toHaveCSS('border-radius','25px');
+  await page.getByRole('button',{name:'게임 시작하기'}).click();
+  await (await differentTile(page)).click();
+  await expect(page.locator('#score')).toHaveText('1점');
+  await page.clock.fastForward(30001);
+  await expect(page.locator('#overlay')).toBeVisible();
+  await page.getByRole('button',{name:'다시 시작하기'}).click();
+  await expect(page.locator('#score')).toHaveText('0점');
+  expect(errors).toEqual([]);
 });
